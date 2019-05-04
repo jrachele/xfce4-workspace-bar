@@ -15,9 +15,7 @@ plugindir = \
 
 libworkspacebar_la_SOURCES = \
 	workspacebar.c \
-	workspacebar.h \
-	workspacebar-dialogs.c \
-	workspacebar-dialogs.h
+	workspacebar.h 
 
 libworkspacebar_la_CFLAGS = \
 	$(LIBXFCE4UTIL_CFLAGS) \

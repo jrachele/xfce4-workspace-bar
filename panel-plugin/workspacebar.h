@@ -29,21 +29,21 @@ typedef struct
 
     /* panel widgets */
     GtkWidget       *ebox;
+    GtkWidget       *button;
     GtkWidget       *hvbox;
-    GtkWidget       *label;
+    GArray          *buttons;
 
-    /* workspacebar settings */
-    gchar           *setting1;
-    gint             setting2;
-    gboolean         setting3;
+    /* screen */
+    WnckScreen      *screen;
+
 }
 WorkspaceBarPlugin;
 
-
-
-void
-workspacebar_save (XfcePanelPlugin *plugin,
-             WorkspaceBarPlugin    *workspacebar);
+// #define XFCE_TYPE_WORKSPACEBAR_PLUGIN            (workspacebar_get_type())
+// #define XFCE_WORKSPACEBAR_PLUGIN(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), XFCE_TYPE_WORKSPACEBAR_PLUGIN, WorkspaceBarPlugin))
+// 
+// GType workspacebar_get_type      (void) G_GNUC_CONST;
+// void  workspacebar_register_type (XfcePanelTypeModule *type_module);
 
 G_END_DECLS
 
