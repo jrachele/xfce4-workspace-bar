@@ -47,6 +47,10 @@ workspacebar_active_workspace_changed  (WnckScreen         *screen,
                                         WnckWorkspace      *previous_workspace,
                                         WorkspaceBarPlugin   *plugin);
 
+static void
+workspacebar_goto_workspace                (GtkWidget       *button,
+                                            WorkspaceBarPlugin *plugin);
+
 /* register the plugin */
 XFCE_PANEL_PLUGIN_REGISTER (workspacebar_construct);
 
@@ -70,7 +74,7 @@ workspacebar_new (XfcePanelPlugin *plugin)
   workspacebar->ebox = gtk_event_box_new ();
   gtk_widget_show (workspacebar->ebox);
 
-  workspacebar->hvbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 2);
+  workspacebar->hvbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 5);
   gtk_widget_show (workspacebar->hvbox);
   gtk_container_add (GTK_CONTAINER (workspacebar->ebox), workspacebar->hvbox);
 
@@ -214,6 +218,7 @@ workspacebar_active_window_changed   (WnckScreen         *screen,
   GList *windowitem;
   GList *workspaces = wnck_screen_get_workspaces(screen);
   GList *workspaceitem;
+  const gchar *tooltip;
 
   /* Iterate through workspaces */
   for (workspaceitem = g_list_first(workspaces); workspaceitem != NULL; workspaceitem = workspaceitem->next) {
@@ -225,14 +230,22 @@ workspacebar_active_window_changed   (WnckScreen         *screen,
         WnckWindow *window = windowitem->data;
         if (wnck_window_get_workspace(window) == workspace) {
            gtk_image_set_from_pixbuf(icon, wnck_window_get_mini_icon(window));
+           tooltip = wnck_window_get_name(window);
            valid = 1;
         }
     }
     if (valid || workspace == active_workspace) {
       /* If the workspace was either active or had an active window on it*/
-      GtkWidget *button = xfce_arrow_button_new (GTK_ARROW_NONE);
+      GtkWidget *button = gtk_button_new();
       gtk_container_add (GTK_CONTAINER (plugin->hvbox), button);
       gtk_button_set_relief (GTK_BUTTON (button), GTK_RELIEF_NONE);
+      if (workspace != active_workspace) {
+        gtk_widget_set_opacity(button, 0.7);
+      }
+      if (!valid) {
+        tooltip = "Empty workspace";
+      }
+      gtk_widget_set_tooltip_text(button, tooltip);
       gtk_widget_show (button);
 
       GtkWidget *hvbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 2);
@@ -249,6 +262,8 @@ workspacebar_active_window_changed   (WnckScreen         *screen,
       g_free(display);
       gtk_widget_show (label);
       gtk_container_add (GTK_CONTAINER (hvbox), label);
+      g_signal_connect (G_OBJECT (button), "clicked",
+        G_CALLBACK (workspacebar_goto_workspace), plugin);
     }
   }
 }
@@ -262,6 +277,33 @@ workspacebar_active_workspace_changed      (WnckScreen       *screen,
   workspacebar_active_window_changed(screen, NULL, plugin);
 }
 
+static void
+workspacebar_goto_workspace                (GtkWidget       *button,
+                                            WorkspaceBarPlugin *plugin)
+{
+  WnckWorkspace *workspace;
+  GtkWidget *hvbox = g_list_first(gtk_container_get_children(button))->data;
+  GList *children = gtk_container_get_children(hvbox);
+  GList *c;
+  GtkWidget *label;
+  int workspace_num;
+
+  /* Iterate through the children until the label is found */
+  for (c = g_list_first(children); c != NULL; c = c->next) {
+    if (GTK_IS_LABEL(c->data)) {
+      label = c->data;
+      const gchar *text = gtk_label_get_text(label);
+      workspace_num = g_ascii_strtoll(text, NULL, 10) - 1;
+      break;
+    }
+  }
+
+  if (G_LIKELY (label != NULL && plugin->screen != NULL)) {
+    workspace = wnck_screen_get_workspace(plugin->screen, workspace_num);
+    wnck_workspace_activate(workspace, gtk_get_current_event_time());
+  }
+
+}
 
 static void
 workspacebar_construct (XfcePanelPlugin *plugin)
