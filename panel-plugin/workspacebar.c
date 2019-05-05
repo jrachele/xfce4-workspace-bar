@@ -240,7 +240,7 @@ workspacebar_active_window_changed   (WnckScreen         *screen,
       gtk_container_add (GTK_CONTAINER (plugin->hvbox), button);
       gtk_button_set_relief (GTK_BUTTON (button), GTK_RELIEF_NONE);
       if (workspace != active_workspace) {
-        gtk_widget_set_opacity(button, 0.7);
+        gtk_widget_set_opacity(button, 0.8);
       }
       if (!valid) {
         tooltip = "Empty workspace";

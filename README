@@ -4,10 +4,3 @@ Workspace Bar
 The workspace bar provides a horizontal bar detailing workspaces and active windows on workspaces akin to i3 or polybar.
 It is preferable to the default windowmenu plugin as it gives the user an immediate idea of their workspace environment at a glance.
 
-
-Installation
-============
-
-The file 'INSTALL' contains generic installation instructions. For more
-detailed information, visit the Sample plugin website at
-http://goodies.xfce.org/projects/panel-plugins/xfce4-sample-plugin
