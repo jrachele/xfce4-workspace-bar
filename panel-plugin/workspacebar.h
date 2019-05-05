@@ -29,9 +29,7 @@ typedef struct
 
     /* panel widgets */
     GtkWidget       *ebox;
-    GtkWidget       *button;
     GtkWidget       *hvbox;
-    GArray          *buttons;
 
     /* screen */
     WnckScreen      *screen;

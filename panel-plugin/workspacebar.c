@@ -37,6 +37,10 @@ static void
 workspacebar_screen_changed            (GtkWidget          *widget,
                                         GdkScreen          *previous_screen,
                                         WorkspaceBarPlugin *plugin);
+static void      
+workspacebar_active_window_changed   (WnckScreen         *screen,
+                                      WnckWindow         *previous_window,
+                                      WorkspaceBarPlugin   *plugin);
 
 static void      
 workspacebar_active_workspace_changed  (WnckScreen         *screen,
@@ -70,8 +74,6 @@ workspacebar_new (XfcePanelPlugin *plugin)
   gtk_widget_show (workspacebar->hvbox);
   gtk_container_add (GTK_CONTAINER (workspacebar->ebox), workspacebar->hvbox);
 
-  // workspacebar->buttons = g_array_new(False, False, sizeof(GtkButton));
-
   return workspacebar;
 }
 
@@ -94,8 +96,8 @@ workspacebar_free (XfcePanelPlugin *plugin,
       // workspacebar_windows_disconnect (plugin);
 
       /* disconnect from the previous screen */
-      // g_signal_handlers_disconnect_by_func (G_OBJECT (workspacebar->screen),
-          // workspacebar_active_window_changed, plugin);
+      g_signal_handlers_disconnect_by_func (G_OBJECT (workspacebar->screen),
+          workspacebar_active_window_changed, plugin);
       g_signal_handlers_disconnect_by_func (G_OBJECT (workspacebar->screen),
           workspacebar_active_workspace_changed, plugin);
 
@@ -171,8 +173,8 @@ G_GNUC_END_IGNORE_DEPRECATIONS
       // workspacebar_windows_disconnect (plugin);
 
       /* disconnect from the previous screen */
-      // g_signal_handlers_disconnect_by_func (G_OBJECT (plugin->screen),
-          // workspacebar_active_window_changed, plugin);
+      g_signal_handlers_disconnect_by_func (G_OBJECT (plugin->screen),
+          workspacebar_active_window_changed, plugin);
       g_signal_handlers_disconnect_by_func (G_OBJECT (plugin->screen),
           workspacebar_active_workspace_changed, plugin);
 
@@ -182,17 +184,17 @@ G_GNUC_END_IGNORE_DEPRECATIONS
   plugin->screen = wnck_screen;
 
   /* connect signal to monitor this screen */
-  // g_signal_connect (G_OBJECT (plugin->screen), "active-window-changed",
-      // G_CALLBACK (workspacebar_active_window_changed), plugin);
+  g_signal_connect (G_OBJECT (plugin->screen), "active-window-changed",
+      G_CALLBACK (workspacebar_active_window_changed), plugin);
   g_signal_connect (G_OBJECT (plugin->screen), "active-workspace-changed",
       G_CALLBACK (workspacebar_active_workspace_changed), plugin);
 
 }
 
-static void
-workspacebar_active_workspace_changed      (WnckScreen       *screen,
-                                            WnckWorkspace    *previous_workspace,
-                                            WorkspaceBarPlugin *plugin)
+static void      
+workspacebar_active_window_changed   (WnckScreen         *screen,
+                                      WnckWindow         *previous_window,
+                                      WorkspaceBarPlugin   *plugin) 
 {
   PangoFontDescription *italic = pango_font_description_from_string("bold italic");
 
@@ -210,113 +212,54 @@ workspacebar_active_workspace_changed      (WnckScreen       *screen,
   WnckWorkspace *active_workspace = wnck_screen_get_active_workspace(screen);
   GList *windows = wnck_screen_get_windows_stacked(screen);
   GList *windowitem;
-  WnckWorkspace *prev_workspace = NULL;
-  for (windowitem = g_list_first(windows); windowitem != NULL; windowitem = windowitem->next) {
-    WnckWindow *window = windowitem->data;
-    WnckWorkspace *workspace = wnck_window_get_workspace(window);
-    if (workspace != prev_workspace) {
-      WnckWindowType type;
-      type = wnck_window_get_window_type(window);
-      if (!(type == WNCK_WINDOW_DESKTOP || type == WNCK_WINDOW_DOCK) || workspace == active_workspace) {
-        // Create button
-        GtkWidget *button = xfce_arrow_button_new (GTK_ARROW_NONE);
-        // xfce_panel_plugin_add_action_widget (XFCE_PANEL_PLUGIN (plugin), plugin->button);
-        gtk_container_add (GTK_CONTAINER (plugin->hvbox), button);
-        gtk_button_set_relief (GTK_BUTTON (button), GTK_RELIEF_NONE);
-        gtk_widget_show (button);
+  GList *workspaces = wnck_screen_get_workspaces(screen);
+  GList *workspaceitem;
 
-        GtkWidget *hvbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 2);
-        gtk_widget_show (hvbox);
-        gtk_container_add (GTK_CONTAINER (button), hvbox);
+  /* Iterate through workspaces */
+  for (workspaceitem = g_list_first(workspaces); workspaceitem != NULL; workspaceitem = workspaceitem->next) {
+    /* We must determine the icon for the workspace */
+    int valid = 0;
+    WnckWorkspace *workspace = workspaceitem->data;
+    GtkWidget *icon = gtk_image_new_from_icon_name("user-desktop", GTK_ICON_SIZE_BUTTON);
+    for (windowitem = g_list_first(windows); windowitem != NULL; windowitem = windowitem->next) {
+        WnckWindow *window = windowitem->data;
+        if (wnck_window_get_workspace(window) == workspace) {
+           gtk_image_set_from_pixbuf(icon, wnck_window_get_mini_icon(window));
+           valid = 1;
+        }
+    }
+    if (valid || workspace == active_workspace) {
+      /* If the workspace was either active or had an active window on it*/
+      GtkWidget *button = xfce_arrow_button_new (GTK_ARROW_NONE);
+      gtk_container_add (GTK_CONTAINER (plugin->hvbox), button);
+      gtk_button_set_relief (GTK_BUTTON (button), GTK_RELIEF_NONE);
+      gtk_widget_show (button);
 
-        GtkWidget *icon = gtk_image_new_from_icon_name ("user-desktop", GTK_ICON_SIZE_BUTTON);
-        
-        gtk_image_set_from_pixbuf(icon, wnck_window_get_mini_icon(window));
-        gtk_container_add (GTK_CONTAINER (hvbox), icon);
-        gtk_widget_show (icon);
+      GtkWidget *hvbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 2);
+      gtk_widget_show (hvbox);
+      gtk_container_add (GTK_CONTAINER (button), hvbox);
 
-        int workspace_num = wnck_workspace_get_number(workspace) + 1;
-        gchar *display = g_strdup_printf("%d", workspace_num);
-        GtkWidget *label = gtk_label_new(_(display));
-        if (workspace == active_workspace) gtk_widget_modify_font(label, italic);
-        g_free(display);
-        gtk_widget_show (label);
-        gtk_container_add (GTK_CONTAINER (hvbox), label);
+      gtk_container_add (GTK_CONTAINER (hvbox), icon);
+      gtk_widget_show (icon);
 
-        prev_workspace = workspace;
-      }
+      int workspace_num = wnck_workspace_get_number(workspace) + 1;
+      gchar *display = g_strdup_printf("%d", workspace_num);
+      GtkWidget *label = gtk_label_new(_(display));
+      if (workspace == active_workspace) gtk_widget_modify_font(label, italic);
+      g_free(display);
+      gtk_widget_show (label);
+      gtk_container_add (GTK_CONTAINER (hvbox), label);
     }
   }
+}
 
-  // GList *workspaces = wnck_screen_get_workspaces(screen);
-  // for (workspaceitem = g_list_first(workspaces); workspaceitem != NULL; workspaceitem = workspaceitem->next) {
-  //   /* Only add the workspace if there is a window on it*/
-  //   WnckWorkspace *workspace = workspaceitem->data;
-  //   WnckScreen    *workspace_screen = wnck_workspace_get_screen(workspace);
-  //   WnckWindow    *workspace_window = wnck_screen_get_active_window(workspace_screen);
-  //   // if (workspace_window != NULL && g_strcmp0(wnck_window_get_name(workspace_window), "Desktop") == 0 && workspace != active_workspace) continue;
-  //   // if (workspace_window == NULL || g_strcmp0(wnck_window_get_name(workspace_window), "Desktop") == 0) continue;
-  //   GtkWidget *button = xfce_arrow_button_new (GTK_ARROW_NONE);
-  //   // xfce_panel_plugin_add_action_widget (XFCE_PANEL_PLUGIN (plugin), plugin->button);
-  //   gtk_container_add (GTK_CONTAINER (plugin->hvbox), button);
-  //   gtk_button_set_relief (GTK_BUTTON (button), GTK_RELIEF_NONE);
-  //   gtk_widget_show (button);
-
-  //   GtkWidget *hvbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 2);
-  //   gtk_widget_show (hvbox);
-  //   gtk_container_add (GTK_CONTAINER (button), hvbox);
-
-  //   GtkWidget *icon = gtk_image_new_from_icon_name ("user-desktop", GTK_ICON_SIZE_BUTTON);
-  //   if (workspace_window != NULL) {
-  //     gtk_image_set_from_pixbuf(icon, wnck_window_get_mini_icon(workspace_window));
-  //     gtk_container_add (GTK_CONTAINER (hvbox), icon);
-  //     gtk_widget_show (icon);
-  //   }
-
-  //   int workspace_num = wnck_workspace_get_number(workspace) + 1;
-  //   gchar *display = g_strdup_printf("%d", workspace_num);
-  //   GtkWidget *label = gtk_label_new(_(display));
-  //   if (workspace == active_workspace) gtk_widget_modify_font(label, italic);
-  //   g_free(display);
-  //   gtk_widget_show (label);
-  //   gtk_container_add (GTK_CONTAINER (hvbox), label);
-  // }
-
-  
-  
-  // GList *workspace;
-  // for (workspace = g_list_first(workspaces); workspace != NULL; workspace = workspace->next) {
-  //   WnckWorkspace *ws = workspace->data;
-  //   /* TODO: This is real inefficient */
-  //     GtkWidget *button = xfce_arrow_button_new (GTK_ARROW_NONE);
-  //     // xfce_panel_plugin_add_action_widget (XFCE_PANEL_PLUGIN (plugin), plugin->button);
-  //     gtk_container_add (GTK_CONTAINER (plugin->hvbox), button);
-  //     gtk_button_set_relief (GTK_BUTTON (button), GTK_RELIEF_NONE);
-  //     gtk_widget_show (button);
-
-  //     int workspace_num = wnck_workspace_get_number(ws) + 1;
-  //     gchar *display = g_strdup_printf("%d", workspace_num);
-  //     GtkWidget *label = gtk_label_new(_(display));
-  //     g_free(display);
-  //     gtk_widget_show (label);
-  //     gtk_container_add (GTK_CONTAINER (button), label);
-  //     // gtk_widget_set_name (plugin->button, "windowmenu-button");
-  //     // g_signal_connect (G_OBJECT (plugin->button), "toggled",
-  //     //     G_CALLBACK (window_menu_plugin_menu), plugin);
-
-  //   // g_message(_(wnck_workspace_get_name(workspace->data)));
-  // }
-
-  // GtkWidget        *label = GTK_WIDGET (plugin->label);
-  // int workspace_num;
-  // gchar *display;
-
-  // /* set the workspace text */
-  // plugin->workspace = workspace;
-  // workspace_num = wnck_workspace_get_number(workspace) + 1;
-  // display = g_strdup_printf("%d", workspace_num);
-  // gtk_label_set_text(label, display);
-  // g_free(display);
+static void
+workspacebar_active_workspace_changed      (WnckScreen       *screen,
+                                            WnckWorkspace    *previous_workspace,
+                                            WorkspaceBarPlugin *plugin)
+{
+  /* refresh the top bar */
+  workspacebar_active_window_changed(screen, NULL, plugin);
 }
 
 
