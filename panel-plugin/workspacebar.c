@@ -51,6 +51,16 @@ static void
 workspacebar_goto_workspace                (GtkWidget       *button,
                                             WorkspaceBarPlugin *plugin);
 
+static GtkWidget*
+workspacebar_window_menu_new           (WnckScreen *screen,
+                                        WorkspaceBarPlugin *plugin);
+
+
+static gboolean
+workspacebar_window_menu_click (GtkWidget      *menu_item,
+                                GdkEventButton *event,
+                                WnckWindow     *window);
+
 /* register the plugin */
 XFCE_PANEL_PLUGIN_REGISTER (workspacebar_construct);
 
@@ -200,7 +210,7 @@ workspacebar_active_window_changed   (WnckScreen         *screen,
                                       WnckWindow         *previous_window,
                                       WorkspaceBarPlugin   *plugin) 
 {
-  PangoFontDescription *italic = pango_font_description_from_string("bold italic");
+  PangoFontDescription *bold = pango_font_description_from_string("bold");
 
   if (screen == NULL) return;
 
@@ -258,12 +268,23 @@ workspacebar_active_window_changed   (WnckScreen         *screen,
       int workspace_num = wnck_workspace_get_number(workspace) + 1;
       gchar *display = g_strdup_printf("%d", workspace_num);
       GtkWidget *label = gtk_label_new(_(display));
-      if (workspace == active_workspace) gtk_widget_modify_font(label, italic);
+      if (workspace == active_workspace) gtk_widget_modify_font(label, bold);
       g_free(display);
       gtk_widget_show (label);
       gtk_container_add (GTK_CONTAINER (hvbox), label);
       g_signal_connect (G_OBJECT (button), "clicked",
         G_CALLBACK (workspacebar_goto_workspace), plugin);
+
+      if (workspace == active_workspace) {
+        // Create a menu button to swap between windows
+        GtkWidget *menu_button = gtk_menu_button_new();
+        gtk_container_add(GTK_CONTAINER (plugin->hvbox), menu_button);
+        gtk_button_set_relief (GTK_BUTTON (menu_button), GTK_RELIEF_NONE);
+        gtk_widget_show(menu_button);
+
+        GtkWidget *menu = workspacebar_window_menu_new(screen, plugin);
+        gtk_menu_button_set_popup(menu_button, menu);
+      }
     }
   }
 }
@@ -305,6 +326,68 @@ workspacebar_goto_workspace                (GtkWidget       *button,
 
 }
 
+static GtkWidget*
+workspacebar_window_menu_new           (WnckScreen *screen,
+                                        WorkspaceBarPlugin *plugin)
+{
+  if (plugin == NULL) return NULL;
+  PangoFontDescription *bold = pango_font_description_from_string("bold");
+
+  GtkWidget *menu = gtk_menu_new();
+  WnckWorkspace *workspace = wnck_screen_get_active_workspace(screen);
+  int workspace_num = wnck_workspace_get_number(workspace) + 1;
+  gchar *display = g_strdup_printf("Workspace %d", workspace_num);
+  GtkWidget *menu_header = gtk_menu_item_new_with_label(display);
+  g_free(display);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), menu_header);
+  gtk_widget_show(menu_header);
+
+  GtkWidget *separator = gtk_separator_menu_item_new();
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), separator);
+  gtk_widget_show(separator);
+  
+
+  GList *windows = wnck_screen_get_windows_stacked(screen);
+  GList *windowitem;
+
+  for (windowitem = windows; windowitem != NULL; windowitem = windowitem->next) {
+    WnckWindow *window = windowitem->data;
+    WnckWorkspace *window_workspace = wnck_window_get_workspace(window);
+    if (window_workspace != workspace || window_workspace == NULL) continue;
+    const gchar *name = wnck_window_get_name(window);
+    
+    // Create menu item
+    GtkWidget *menu_item = gtk_image_menu_item_new_with_label(name);
+    GtkWidget *label = gtk_bin_get_child(GTK_BIN(menu_item));
+    if (wnck_window_is_active(window)) {
+      gtk_widget_modify_font(label, bold);
+    }
+
+    // Extract image
+    GtkWidget *image = gtk_image_new_from_pixbuf(wnck_window_get_mini_icon(window));
+    gtk_image_menu_item_set_image( GTK_IMAGE_MENU_ITEM(menu_item), image);
+    gtk_widget_show(image);    
+
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), menu_item);
+    gtk_widget_show(menu_item);
+
+    g_signal_connect (G_OBJECT (menu_item), "button-release-event",
+        G_CALLBACK(workspacebar_window_menu_click), window);
+  }
+
+  return menu;
+}
+
+static gboolean
+workspacebar_window_menu_click (GtkWidget      *menu_item,
+                                GdkEventButton *event,
+                                WnckWindow     *window)
+
+{
+  if (event->type != GDK_BUTTON_RELEASE) return FALSE;
+  wnck_window_activate(window, event->time);
+  return FALSE;
+}
 static void
 workspacebar_construct (XfcePanelPlugin *plugin)
 {
